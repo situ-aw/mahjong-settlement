@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>麻雀 精算ツール</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#111827;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif}
+.app{width:min(520px,100%);margin:auto;padding:10px 10px 18px}
+h1{font-size:20px;text-align:center;margin:5px 0 10px}
+.mode{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+button{font:inherit;border:0;cursor:pointer}.mode button{padding:10px;border-radius:9px;background:#d1d5db;font-weight:700}.mode button.active{background:#111827;color:#fff}
+.settings{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+.setting{background:#fff;border-radius:9px;padding:7px;text-align:center;border:1px solid #e5e7eb}.setting small{display:block;color:#6b7280;font-size:11px}.setting b{font-size:14px}
+.players{display:grid;gap:7px;margin-bottom:8px}.player{display:grid;grid-template-columns:48px 1fr;align-items:center;gap:6px;background:#fff;padding:6px;border-radius:9px;border:1px solid #e5e7eb}
+.player label{font-weight:700;font-size:13px}.player input{width:100%;padding:9px;border:1px solid #d1d5db;border-radius:7px;font-size:18px;text-align:right;background:#fafafa}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}.actions button{padding:9px;border-radius:8px;font-weight:700;background:#e5e7eb}.actions .calc{background:#111827;color:white}
+.notice{font-size:11px;color:#6b7280;text-align:center;margin:4px 0 7px}
+.result{background:#fff;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden}.result h2{font-size:14px;margin:0;padding:8px 10px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
+.rows{display:grid}.row{display:grid;grid-template-columns:42px 1fr 72px 72px;align-items:center;padding:7px 9px;border-bottom:1px solid #eee;font-size:13px}.row:last-child{border-bottom:0}.rank{font-weight:800}.score{text-align:right;color:#4b5563}.uma{text-align:right;color:#4b5563}.point{text-align:right;font-size:17px;font-weight:800}.plus{color:#047857}.minus{color:#b91c1c}.zero{color:#374151}
+.sum{text-align:center;padding:5px;font-size:11px;color:#6b7280;border-top:1px solid #eee}
+@media(max-height:700px){.app{padding-top:5px}.player{padding:4px}.player input{padding:7px}.row{padding:5px 8px}.setting{padding:5px}.actions{margin-bottom:5px}}
+</style>
+</head>
+<body>
+<main class="app">
+<h1>麻雀 精算ツール</h1>
+<div class="mode">
+<button id="sanmaBtn" class="active">三麻</button>
+<button id="yonmaBtn">四麻</button>
+</div>
+<div class="settings">
+<div class="setting"><small>持ち点</small><b>35,000</b></div>
+<div class="setting"><small>返し</small><b>40,000</b></div>
+<div class="setting"><small>レート</small><b>50（テンゴ）</b></div>
+<div class="setting"><small>ウマ</small><b id="umaText">順位20</b></div>
+<div class="setting"><small>方式</small><b id="methodText">三麻</b></div>
+<div class="setting"><small>入力人数</small><b id="countText">3人</b></div>
+</div>
+<div id="players" class="players"></div>
+<div class="actions">
+<button id="resetBtn">リセット</button>
+<button id="calcBtn" class="calc">精算する</button>
+</div>
+<div class="notice">点数を入力すると自動計算されます（合計が110,000点/140,000点でなくても計算可能）</div>
+<section class="result">
+<h2>最終ポイント</h2>
+<div id="results" class="rows"></div>
+<div id="sum" class="sum">合計：0.0</div>
+</section>
+</main>
+<script>
+const state={mode:"sanma", count:3};
+const playersEl=document.getElementById("players"), resultsEl=document.getElementById("results");
+const umaText=document.getElementById("umaText"), methodText=document.getElementById("methodText"), countText=document.getElementById("countText");
+function makeInputs(){
+ state.count=state.mode==="sanma"?3:4;
+ playersEl.innerHTML="";
+ for(let i=0;i<state.count;i++){
+   const d=document.createElement("div"); d.className="player";
+   d.innerHTML=`<label>プレイヤー${i+1}</label><input inputmode="numeric" type="number" step="100" placeholder="点数" data-i="${i}">`;
+   playersEl.appendChild(d);
+ }
+ playersEl.querySelectorAll("input").forEach(x=>x.addEventListener("input",calc));
+ umaText.textContent=state.mode==="sanma"?"順位20":"10-20";
+ methodText.textContent=state.mode==="sanma"?"三麻":"四麻";
+ countText.textContent=state.count+"人";
+ resultsEl.innerHTML="";
+ document.getElementById("sum").textContent="合計：0.0";
+}
+function calc(){
+ const ins=[...playersEl.querySelectorAll("input")];
+ const vals=ins.map(x=>Number(x.value));
+ if(vals.some(v=>!Number.isFinite(v)||v===0) || vals.filter(v=>v!==0).length<state.count) return;
+ const indexed=vals.map((score,i)=>({score,i})).sort((a,b)=>b.score-a.score);
+ let uma;
+ if(state.mode==="sanma") uma=[20,0,-20];
+ else uma=[20,10,-10,-20];
+ // 40,000返し: 返し点との差を1000点=1ポイントとして扱い、
+ // レート50(テンゴ): 1ポイント=50円相当。表示ポイントは麻雀の精算ポイント。
+ const out=indexed.map((p,rank)=>{
+   const base=(p.score-40000)/1000;
+   return {i:p.i,score:p.score,rank:rank+1,uma:uma[rank],point:base+uma[rank]};
+ });
+ resultsEl.innerHTML=out.map(r=>{
+   const cls=r.point>0?"plus":r.point<0?"minus":"zero";
+   return `<div class="row"><div class="rank">${r.rank}位</div><div class="score">${r.score.toLocaleString()}点</div><div class="uma">${r.uma>0?"+":""}${r.uma}</div><div class="point ${cls}">${r.point>0?"+":""}${r.point.toFixed(1)}</div></div>`;
+ }).join("");
+ const total=out.reduce((a,b)=>a+b.point,0);
+ document.getElementById("sum").textContent=`合計：${total.toFixed(1)}（ウマ・オカ反映）`;
+}
+document.getElementById("sanmaBtn").onclick=()=>{state.mode="sanma";document.getElementById("sanmaBtn").classList.add("active");document.getElementById("yonmaBtn").classList.remove("active");makeInputs()};
+document.getElementById("yonmaBtn").onclick=()=>{state.mode="yonma";document.getElementById("yonmaBtn").classList.add("active");document.getElementById("sanmaBtn").classList.remove("active");makeInputs()};
+document.getElementById("calcBtn").onclick=calc;
+document.getElementById("resetBtn").onclick=makeInputs;
+makeInputs();
+</script>
+</body>
+</html>
