@@ -94,7 +94,7 @@ function calc(){
  document.getElementById("result").innerHTML=out.map(r=>{
    const cls=r.point>0?"positive":r.point<0?"negative":"zero";
    const money=r.point*rate;
-   return `<div class="resrow"><div class="rank">${r.rank}位</div><div class="calc">${r.point}pt × ${rate} = ${money.toLocaleString()}円</div><div class="pt ${cls}">${r.point>0?"+":""}${r.point}pt</div></div>`;
+   return `<div class="resrow"><div class="rank">${r.rank}位</div><div class="calc">${money.toLocaleString()}円</div></div>`;
  }).join("");
 }
 document.getElementById("y").onclick=()=>{mode="yonma";document.getElementById("y").classList.add("active");document.getElementById("s").classList.remove("active");setup()};
