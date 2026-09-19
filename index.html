@@ -93,7 +93,7 @@ function calc(){
  }));
  document.getElementById("result").innerHTML=out.map(r=>{
    const cls=r.point>0?"positive":r.point<0?"negative":"zero";
-   const money=r.point*rate;
+   const money=Math.round((r.point*rate)/10)*10;
    return `<div class="resrow"><div class="rank">${r.rank}位</div><div class="calc">${money.toLocaleString()}円</div></div>`;
  }).join("");
 }
