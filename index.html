@@ -12,7 +12,7 @@ h1{text-align:center;font-size:22px;margin:4px 0 10px}
 .card{background:#fff;border:1px solid #ddd;border-radius:10px;margin-bottom:9px;overflow:hidden}.title{font-weight:700;background:#eee;padding:7px 10px;font-size:14px}
 .settings{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#ddd}.setting{background:#fff;padding:7px 9px;display:flex;justify-content:space-between;font-size:13px}.setting b{font-size:13px}
 .inputs{padding:9px}.inputrow{display:grid;grid-template-columns:1fr 130px;align-items:center;gap:8px;margin:6px 0}.inputrow label{font-weight:700}.inputrow input{width:100%;padding:9px;border:1px solid #aaa;border-radius:7px;text-align:right;font-size:18px}.auto{background:#f0f0f0;color:#555}
-.result{padding:0 9px 8px}.resrow{display:grid;grid-template-columns:48px 1fr 85px;gap:5px;padding:7px 2px;border-bottom:1px solid #eee;font-size:14px}.resrow:last-child{border:0}.rank{font-weight:700}.pt{text-align:right;font-weight:800;font-size:16px}.positive{color:#087443}.negative{color:#b42318}.zero{color:#444}
+.result{padding:0 9px 8px}.resrow{display:grid;grid-template-columns:42px 1fr 92px;gap:5px;padding:7px 2px;border-bottom:1px solid #eee;font-size:14px}.calc{font-weight:600}.resrow:last-child{border:0}.rank{font-weight:700}.pt{text-align:right;font-weight:800;font-size:16px}.positive{color:#087443}.negative{color:#b42318}.zero{color:#444}
 .note{text-align:center;color:#777;font-size:11px;margin:5px 0}
 button.reset{width:100%;padding:9px;border:0;border-radius:7px;background:#ddd;font-weight:700}
 </style>
@@ -56,23 +56,45 @@ function setup(){
  box.innerHTML="";
  for(let i=0;i<n;i++){
    const row=document.createElement("div");row.className="inputrow";
-   row.innerHTML=`<label>${names[i]}${i===0?'（自動計算）':''}</label><input ${i===0?'class="auto readonly" readonly':''} inputmode="numeric" type="number" step="100" placeholder="${i===0?'AUTO':'例: '+(i===1?'40000':'25000')}">`;
+   row.innerHTML=`<label>${names[i]}${i===0?'（自動計算）':''}</label><input ${i===0?'class="auto readonly" readonly':''} inputmode="decimal" type="number" step="100" placeholder="${i===0?'AUTO':'例: '+(i===1?'40000':'25000')}">`;
    box.appendChild(row);
  }
  box.querySelectorAll("input").forEach((el,i)=>{if(i>0)el.addEventListener("input",calc)});
  document.getElementById("result").innerHTML="";
 }
 function calc(){
- const ins=[...document.querySelectorAll("#inputs input")], vals=ins.map(x=>Number(x.value));
- const known=vals.slice(1);
- if(known.some(v=>!Number.isFinite(v)||v<=0)){ins[0].value="";document.getElementById("result").innerHTML="";return}
- const first=total()-known.reduce((a,b)=>a+b,0); ins[0].value=first;
- const scores=vals.map((v,i)=>({score:v,i})); // inputs are already rank ordered
+ const ins=[...document.querySelectorAll("#inputs input")];
+ // 「0」やマイナスの点数も有効。空欄だけを未入力として扱う。
+ const knownInputs=ins.slice(1);
+ if(knownInputs.some(x=>x.value.trim()==="")){
+   ins[0].value="";
+   document.getElementById("result").innerHTML="";
+   return;
+ }
+ const known=knownInputs.map(x=>Number(x.value));
+ if(known.some(v=>!Number.isFinite(v))){
+   ins[0].value="";
+   document.getElementById("result").innerHTML="";
+   return;
+ }
+ const first=total()-known.reduce((a,b)=>a+b,0);
+ ins[0].value=first;
+ const vals=[first,...known];
  const u=uma();
- let out=scores.map((x,i)=>({rank:i+1,score:x.score,uma:u[i],point:(x.score-40000)/1000+u[i]}));
+ // オカ = (点返し - 初期点) × 人数。オカは1位に加算する。
+ const oka=(40000-(mode==="yonma"?35000:35000))*(mode==="yonma"?4:3)/1000;
+ const rate=50;
+ let out=vals.map((score,i)=>({
+   rank:i+1,
+   score,
+   uma:u[i],
+   oka:i===0?oka:0,
+   point:(score-40000)/1000+u[i]+(i===0?oka:0)
+ }));
  document.getElementById("result").innerHTML=out.map(r=>{
    const cls=r.point>0?"positive":r.point<0?"negative":"zero";
-   return `<div class="resrow"><div class="rank">${r.rank}位</div><div>${r.score.toLocaleString()}点　ウマ ${r.uma>0?"+":""}${r.uma}</div><div class="pt ${cls}">${r.point>0?"+":""}${r.point.toFixed(1)}</div></div>`;
+   const money=r.point*rate;
+   return `<div class="resrow"><div class="rank">${r.rank}位</div><div class="calc">${r.point}pt × ${rate} = ${money.toLocaleString()}円</div><div class="pt ${cls}">${r.point>0?"+":""}${r.point}pt</div></div>`;
  }).join("");
 }
 document.getElementById("y").onclick=()=>{mode="yonma";document.getElementById("y").classList.add("active");document.getElementById("s").classList.remove("active");setup()};
